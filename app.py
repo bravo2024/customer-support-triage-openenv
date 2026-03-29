@@ -135,3 +135,10 @@ with gr.Blocks(title="Customer Support Triage") as demo:
 
 
 app = gr.mount_gradio_app(app, demo, path="/ui")
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))
