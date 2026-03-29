@@ -1,24 +1,13 @@
 """
-FastAPI + Gradio UI for Customer Support Ticket Triage (OpenEnv).
-Combines FastAPI for HF Spaces and Gradio for interactive task execution.
+Gradio UI for Customer Support Ticket Triage (OpenEnv).
+Native Gradio SDK for Hugging Face Spaces (no Docker).
 """
 
-from fastapi import FastAPI
 import gradio as gr
 from env import CustomerSupportEnv, Action, Observation
 from typing import Literal
 
 
-# FastAPI App (for HF Spaces)
-app = FastAPI()
-
-
-@app.get("/")
-def greet():
-    return {"status": "Customer Support Triage Environment"}
-
-
-# Gradio UI (for interacting with the environment)
 def run_episode(task: Literal["easy", "medium", "hard"], max_steps: int = 10) -> str:
     """Run a full episode and return the final score."""
     env = CustomerSupportEnv(task=task)
@@ -64,7 +53,9 @@ def show_observation(task: Literal["easy", "medium", "hard"]) -> str:
 
 
 # Gradio UI
-with gr.Blocks(title="Customer Support Triage") as demo:
+demo = gr.Blocks(title="Customer Support Triage")
+
+with demo:
     gr.Markdown("# Customer Support Ticket Triage (OpenEnv)")
     
     with gr.Tab("Run Episode"):
@@ -101,5 +92,4 @@ with gr.Blocks(title="Customer Support Triage") as demo:
     )
 
 
-# Mount Gradio UI at `/gradio`
-app = gr.mount_gradio_app(app, demo, path="/gradio")
+demo.launch()

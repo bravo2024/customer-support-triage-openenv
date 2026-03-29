@@ -3,8 +3,7 @@ title: Customer Support Triage
 emoji: 🚀
 colorFrom: blue
 colorTo: purple
-sdk: docker
-sdk_version: "3.9"
+sdk: gradio
 app_file: app.py
 pinned: false
 ---
@@ -46,7 +45,7 @@ Train AI agents to triage customer support tickets with **3 difficulty tiers** i
 ## Setup
 
 1. **Deploy to Hugging Face Spaces**:
-   - This Space is ready to run with `cpu-basic` hardware.
+   - This Space runs natively on **Gradio SDK** (no Docker).
    - Builds automatically on push.
 
 2. **Run Locally**:
