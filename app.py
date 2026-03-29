@@ -1,55 +1,32 @@
-"""OpenEnv HTTP app — customer-support-triage.
-
-Implements the full OpenEnv server spec:
-  POST /reset        reset environment
-  POST /step         execute action
-  GET  /state        current observation
-  GET  /health       {"status": "healthy"}
-  GET  /metadata     env name + description
-  GET  /schema       action / observation / state schemas
-  POST /mcp          JSON-RPC 2.0 MCP endpoint
+"""OpenEnv HTTP app — customer-support-triage. Implements the full OpenEnv server spec:
+POST /reset        reset environment
+POST /step         execute action
+GET /state         current observation
+GET /health        {"status": "healthy"}
+GET /metadata      env name + description
+GET /schema        action / observation / state schemas
+POST /mcp          JSON-RPC 2.0 MCP endpoint
 """
-
-from __future__ import annotations
-
+from __futureing import annotations
 from typing import Any, Dict, Literal, Optional
-
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, APIRouter
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from env import Action, CustomerSupportEnv, Observation, StepRequest
+import gradio as gr
 
-from env import Action, CustomerSupportEnv, Observation
-
-app = FastAPI(title="customer-support-triage", version="0.1.0")
-
-_env: CustomerSupportEnv = CustomerSupportEnv(task="easy")
-
-
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
+# FastAPI subapp strictly for OpenEnv spec compliance
+openenv_subapp = FastAPI(title="customer-support-triage", version="0.1.0")
+_env = None
 
 class ResetRequest(BaseModel):
     task: Literal["easy", "medium", "hard"] = "easy"
 
-
-class StepRequest(BaseModel):
-    ticket_id: str
-    action_type: Literal["assign", "prioritize", "respond", "close"]
-    target_agent: Optional[str] = None
-    priority: Optional[Literal["low", "medium", "high"]] = None
-    response_draft: Optional[str] = None
-
-
-# ---------------------------------------------------------------------------
-# Standard OpenEnv endpoints
-# ---------------------------------------------------------------------------
-
-@app.get("/health")
+@openenv_subapp.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "healthy"}
 
-
-@app.get("/metadata")
+@openenv_subapp.get("/metadata")
 def metadata() -> Dict[str, str]:
     return {
         "name": "customer-support-triage",
@@ -59,8 +36,7 @@ def metadata() -> Dict[str, str]:
         ),
     }
 
-
-@app.get("/schema")
+@openenv_subapp.get("/schema")
 def schema() -> Dict[str, Any]:
     return {
         "action": Action.model_json_schema(),
@@ -74,73 +50,7 @@ def schema() -> Dict[str, Any]:
         },
     }
 
-
-@app.post("/mcp")
-async def mcp(request: Request) -> Dict[str, Any]:
-    """Minimal JSON-RPC 2.0 MCP endpoint."""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    req_id = body.get("id")
-    method = body.get("method", "")
-
-    if method == "tools/list":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "tools": [
-                    {
-                        "name": "reset",
-                        "description": "Reset the environment to initial state.",
-                        "inputSchema": ResetRequest.model_json_schema(),
-                    },
-                    {
-                        "name": "step",
-                        "description": "Execute a triage action on a ticket.",
-                        "inputSchema": StepRequest.model_json_schema(),
-                    },
-                ]
-            },
-        }
-
-    if method == "tools/call":
-        params = body.get("params", {})
-        tool = params.get("name", "")
-        args = params.get("arguments", {})
-        if tool == "reset":
-            result = reset(ResetRequest(**args) if args else None)
-            return {"jsonrpc": "2.0", "id": req_id, "result": result}
-        if tool == "step":
-            result = step(StepRequest(**args))
-            return {"jsonrpc": "2.0", "id": req_id, "result": result}
-
-    return {
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "error": {"code": -32601, "message": "Method not found"},
-    }
-
-
-# ---------------------------------------------------------------------------
-# Environment endpoints
-# ---------------------------------------------------------------------------
-
-@app.get("/")
-def root_get() -> Dict[str, str]:
-    return {"name": "customer-support-triage", "status": "ok"}
-
-
-@app.post("/")
-def root_post(req: Optional[ResetRequest] = None) -> dict:
-    return reset(req)
-
-
-@app.post("/reset")
-@app.post("/reset/")
-@app.post("/openenv/reset")
+@openenv_subapp.post("/reset")
 def reset(req: Optional[ResetRequest] = None) -> dict:
     global _env
     task = req.task if req else "easy"
@@ -148,19 +58,10 @@ def reset(req: Optional[ResetRequest] = None) -> dict:
     obs = _env.reset()
     return {"observation": obs.model_dump(), "info": {"task": task}}
 
-
-@app.get("/state")
-@app.get("/state/")
-@app.get("/openenv/state")
-def state() -> dict:
-    obs = _env.state()
-    return {"observation": obs.model_dump()}
-
-
-@app.post("/step")
-@app.post("/step/")
-@app.post("/openenv/step")
+@openenv_subapp.post("/step")
 def step(req: StepRequest) -> dict:
+    if _env is None:
+        raise ValueError("Environment not initialized. Call /reset first.")
     action = Action(**req.model_dump())
     obs, reward, done, info = _env.step(action)
     return {
@@ -170,16 +71,57 @@ def step(req: StepRequest) -> dict:
         "info": info,
     }
 
+@openenv_subapp.get("/state")
+def state() -> dict:
+    if _env is None:
+        raise ValueError("Environment not initialized. Call /reset first.")
+    obs = _env.state()
+    return {"observation": obs.model_dump()}
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+# Gradio mount at /ui
+ui_app = FastAPI()
+ui_app.mount("/openenv", openenv_subapp)
 
-def main(host: str = "0.0.0.0", port: int = 7860) -> None:
-    import os
-    import uvicorn
-    uvicorn.run(app, host=host, port=int(os.getenv("PORT", str(port))))
+@ui_app.post("/reset")
+def reset_forward(req: Optional[ResetRequest] = None) -> dict:
+    return openenv_subapp.reset(req)
 
+@ui_app.post("/step")
+def step_forward(req: StepRequest) -> dict:
+    return openenv_subapp.step(req)
 
-if __name__ == "__main__":
-    main()
+@ui_app.get("/state")
+def state_forward() -> dict:
+    return openenv_subapp.state()
+
+@ui_app.post("/reset/")
+def reset_slash_forward(req: Optional[ResetRequest] = None) -> dict:
+    return reset_forward(req)
+
+@ui_app.post("/step/")
+def step_slash_forward(req: StepRequest) -> dict:
+    return step_forward(req)
+
+@ui_app.get("/state/")
+def state_slash_forward() -> dict:
+    return state_forward()
+
+@ui_app.get("/")
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/ui")
+
+# Mount Gradio explicitly at /ui
+gradio_ui = gr.Interface(
+    fn=lambda task, verbose: (_env.reset() if _env else {}),
+    inputs=[
+        gr.Dropdown(label="Task", choices=["easy", "medium", "hard"]),
+        gr.Checkbox(label="Verbose", value=False),
+    ],
+    outputs=gr.JSON(label="Observation"),
+    title="Customer Support Triage",
+    allow_flagging="never",
+)
+
+gradio_app = gr.mount_gradio_app(ui_app, gradio_ui, path="/ui")
+
+app = gradio_app
