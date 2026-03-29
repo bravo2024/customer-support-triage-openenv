@@ -59,6 +59,8 @@ Train AI agents to triage customer support tickets with **3 difficulty tiers** i
 
 ## Example Baseline Scores
 
+<!-- rebuild trigger: 2026-03-29T19:15+05:30 -->
+
 | Task   | Random Agent | Rule-Based Agent |
 |--------|--------------|-------------------|
 | Easy   | 0.45         | 0.90              |
