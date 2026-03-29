@@ -1,5 +1,4 @@
 """Baseline inference runner for Customer Support Triage.
-
 MANDATORY env vars:
 - API_BASE_URL (e.g. https://router.huggingface.co/v1)
 - MODEL_NAME
@@ -7,19 +6,16 @@ MANDATORY env vars:
 
 Uses OpenAI client for all LLM calls.
 """
-
-from __future__ import annotations
-
+from __futureing import annotations
 import json
 import os
 import re
 from typing import List, Literal, Tuple
-
 from openai import OpenAI
-
 from env import Action, CustomerSupportEnv, Observation
 
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME")
 
@@ -29,16 +25,17 @@ MAX_TOKENS = 180
 FALLBACK_ACTION = "close('AUTO_OLDEST')"
 
 ACTION_PATTERN = re.compile(
-    r"^(assign|prioritize|respond|close)\s*\((.*)\)\s*$", re.IGNORECASE
-)
+    r"^(assign|prioritize|respond|close)\s*\((.*)\)\s*$",
+    re.IGNORECASE)
 
-SYSTEM_PROMPT = """You are controlling a customer-support triage environment.
+
+SYSTEM_PROMPT = """
+You are controlling a customer-support triage environment.
 Reply with EXACTLY one action string in one of these forms:
 - assign('TICKET_ID','agent_1')
 - prioritize('TICKET_ID','high')
 - respond('TICKET_ID','short response text')
 - close('TICKET_ID')
-
 Rules:
 - Use single quotes around arguments.
 - Pick ticket IDs from observation.
@@ -50,8 +47,7 @@ Rules:
 def _obs_to_prompt(task: str, step: int, obs: Observation, history: List[str]) -> str:
     tickets = "\n".join(
         f"- {t.id} | priority={t.priority} | sla={t.sla_remaining} | sentiment={t.sentiment} | subject={t.subject} | resolved={t.resolved}"
-        for t in obs.tickets
-    )
+        for t in obs.tickets)
     return (
         f"Task: {task}\n"
         f"Step: {step}\n"
@@ -59,8 +55,7 @@ def _obs_to_prompt(task: str, step: int, obs: Observation, history: List[str]) -
         f"SLA breaches: {obs.sla_breaches}\n"
         f"Recent actions: {history[-4:] if history else 'None'}\n"
         f"Tickets:\n{tickets}\n"
-        "Return one valid action string."
-    )
+        "Return one valid action string.")
 
 
 def _oldest_ticket_id(obs: Observation) -> str:
@@ -81,9 +76,10 @@ def _parse_action(action_text: str, obs: Observation) -> Action:
 
     # crude single-quote arg parser
     args = re.findall(r"'([^']*)'", raw_args)
-
     if kind == "close" and len(args) >= 1:
-        ticket_id = args[0] if args[0] != "AUTO_OLDEST" else _oldest_ticket_id(obs)
+        ticket_id = args[0]
+        if args[0] != "AUTO_OLDEST":
+            ticket_id = _oldest_ticket_id(obs)
         return Action(ticket_id=ticket_id, action_type="close")
 
     if kind == "assign" and len(args) >= 2:
@@ -111,7 +107,6 @@ def run_task(client: OpenAI, task: Literal["easy", "medium", "hard"]) -> Tuple[f
     for step in range(1, MAX_STEPS + 1):
         if done:
             break
-
         user_prompt = _obs_to_prompt(task, step, obs, history)
 
         try:
@@ -145,13 +140,12 @@ def main() -> None:
         raise RuntimeError("Missing MODEL_NAME.")
 
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-
     scores = {}
     for t in ("easy", "medium", "hard"):
         score, steps = run_task(client, t)  # type: ignore[arg-type]
         scores[t] = {"score": round(score, 4), "steps": steps}
-        print(f"{t}: score={score:.4f}, steps={steps}")
 
+    print(f"{t}: score={score:.4f}, steps={steps}")
     print("\nJSON summary:")
     print(json.dumps(scores, indent=2))
 
