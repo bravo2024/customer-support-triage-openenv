@@ -1,12 +1,11 @@
+spec_version: 1
 name: customer-support-triage
 version: 0.1.0
 description: Real-world customer support triage environment (easy/medium/hard).
-entrypoint: env.py
-observation_model: Observation
-action_model: Action
-step_method: step
-reset_method: reset
-state_method: state
+type: space
+runtime: fastapi
+app: app:app
+port: 7860
 tasks:
   - id: easy
     description: Sentiment labeling workflow

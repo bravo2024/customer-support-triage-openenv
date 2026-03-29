@@ -1,0 +1,19 @@
+[project]
+name = "customer-support-triage"
+version = "0.1.0"
+description = "Real-world customer support triage environment"
+requires-python = ">=3.10"
+dependencies = [
+    "openenv-core",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.0.0",
+    "openai>=1.40.0",
+]
+
+[project.scripts]
+server = "app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,22 +1,32 @@
-"""OpenEnv HTTP app.
+"""OpenEnv HTTP app — customer-support-triage.
 
-Implements POST reset/step and GET state for automated checks.
+Implements the full OpenEnv server spec:
+  POST /reset        reset environment
+  POST /step         execute action
+  GET  /state        current observation
+  GET  /health       {"status": "healthy"}
+  GET  /metadata     env name + description
+  GET  /schema       action / observation / state schemas
+  POST /mcp          JSON-RPC 2.0 MCP endpoint
 """
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
-from env import Action, CustomerSupportEnv
+from env import Action, CustomerSupportEnv, Observation
 
-app = FastAPI(title="customer-support-triage")
+app = FastAPI(title="customer-support-triage", version="0.1.0")
 
-# Runtime env instance
 _env: CustomerSupportEnv = CustomerSupportEnv(task="easy")
 
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
 
 class ResetRequest(BaseModel):
     task: Literal["easy", "medium", "hard"] = "easy"
@@ -30,20 +40,102 @@ class StepRequest(BaseModel):
     response_draft: Optional[str] = None
 
 
+# ---------------------------------------------------------------------------
+# Standard OpenEnv endpoints
+# ---------------------------------------------------------------------------
+
 @app.get("/health")
-def health() -> dict:
-    return {"ok": True}
+def health() -> Dict[str, str]:
+    return {"status": "healthy"}
 
 
-# Compatibility root for platforms that probe POST /
+@app.get("/metadata")
+def metadata() -> Dict[str, str]:
+    return {
+        "name": "customer-support-triage",
+        "description": (
+            "RL environment for triaging customer support tickets "
+            "across easy / medium / hard difficulty tiers."
+        ),
+    }
+
+
+@app.get("/schema")
+def schema() -> Dict[str, Any]:
+    return {
+        "action": Action.model_json_schema(),
+        "observation": Observation.model_json_schema(),
+        "state": {
+            "type": "object",
+            "properties": {
+                "elapsed_time": {"type": "integer"},
+                "sla_breaches": {"type": "integer"},
+            },
+        },
+    }
+
+
+@app.post("/mcp")
+async def mcp(request: Request) -> Dict[str, Any]:
+    """Minimal JSON-RPC 2.0 MCP endpoint."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    req_id = body.get("id")
+    method = body.get("method", "")
+
+    if method == "tools/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "tools": [
+                    {
+                        "name": "reset",
+                        "description": "Reset the environment to initial state.",
+                        "inputSchema": ResetRequest.model_json_schema(),
+                    },
+                    {
+                        "name": "step",
+                        "description": "Execute a triage action on a ticket.",
+                        "inputSchema": StepRequest.model_json_schema(),
+                    },
+                ]
+            },
+        }
+
+    if method == "tools/call":
+        params = body.get("params", {})
+        tool = params.get("name", "")
+        args = params.get("arguments", {})
+        if tool == "reset":
+            result = reset(ResetRequest(**args) if args else None)
+            return {"jsonrpc": "2.0", "id": req_id, "result": result}
+        if tool == "step":
+            result = step(StepRequest(**args))
+            return {"jsonrpc": "2.0", "id": req_id, "result": result}
+
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": -32601, "message": "Method not found"},
+    }
+
+
+# ---------------------------------------------------------------------------
+# Environment endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/")
+def root_get() -> Dict[str, str]:
+    return {"name": "customer-support-triage", "status": "ok"}
+
+
 @app.post("/")
 def root_post(req: Optional[ResetRequest] = None) -> dict:
     return reset(req)
-
-
-@app.get("/")
-def root_get() -> dict:
-    return {"name": "customer-support-triage", "status": "ok"}
 
 
 @app.post("/reset")
@@ -79,9 +171,15 @@ def step(req: StepRequest) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def main(host: str = "0.0.0.0", port: int = 7860) -> None:
     import os
     import uvicorn
+    uvicorn.run(app, host=host, port=int(os.getenv("PORT", str(port))))
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "7860")))
+
+if __name__ == "__main__":
+    main()
