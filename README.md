@@ -1,3 +1,14 @@
+---
+title: Customer Support Triage
+emoji: 🚀
+colorFrom: blue
+colorTo: purple
+sdk: docker
+sdk_version: "3.9"
+app_file: app.py
+pinned: false
+---
+
 # Customer Support Ticket Triage (OpenEnv)
 
 Train AI agents to triage customer support tickets with **3 difficulty tiers** in a **real-world enterprise workflow**. This environment is fully compliant with the [OpenEnv](https://github.com/openenv/openenv) spec.
