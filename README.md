@@ -8,60 +8,50 @@ app_port: 7860
 pinned: false
 ---
 
-# Customer Support Ticket Triage (OpenEnv)
+# Customer Support Ticket Triage
 
-An RL environment for training AI agents to triage customer support tickets across three difficulty tiers. Fully compliant with the [OpenEnv](https://github.com/meta-pytorch/OpenEnv) spec.
+An RL environment where an AI agent manages a queue of customer support tickets. The agent reads incoming tickets and decides how to handle each one — assign it to a team member, change its priority, draft a response, or close it out. The goal is to resolve tickets quickly without breaching SLAs.
 
-## Tasks
+Built on [OpenEnv](https://github.com/meta-pytorch/OpenEnv).
 
-| Task   | Description                                         | Baseline Score |
-|--------|-----------------------------------------------------|----------------|
-| Easy   | Label tickets by sentiment                          | 0.90           |
-| Medium | Draft responses to simple queries                   | 0.75           |
-| Hard   | Full triage (assign/prioritize/respond) under SLAs  | 0.60           |
+## How it works
 
-## API Endpoints
+The environment exposes a simple HTTP API. You reset it to get a fresh set of tickets, then step through it by sending actions. Each action affects the queue and returns an updated observation plus a reward signal.
 
-| Endpoint    | Method | Description                    | Response                                    |
-|-------------|--------|--------------------------------|---------------------------------------------|
-| `/health`   | GET    | Liveness check                 | `{"status": "healthy"}`                     |
-| `/metadata` | GET    | Env name + description         | `{"name": ..., "description": ...}`         |
-| `/schema`   | GET    | Action / observation schemas   | `{"action": ..., "observation": ..., "state": ...}` |
-| `/reset`    | POST   | Reset env, returns initial obs | `{"observation": ..., "info": ...}`         |
-| `/step`     | POST   | Execute action                 | `{"observation": ..., "reward": ..., "done": ..., "info": ...}` |
-| `/state`    | GET    | Current observation            | `{"observation": ...}`                      |
-| `/mcp`      | POST   | JSON-RPC 2.0 MCP endpoint      | JSON-RPC 2.0 response                       |
+There are three difficulty levels:
 
-## Action Space
+- **Easy** — small queue, straightforward tickets, plenty of SLA time
+- **Medium** — more tickets, mixed urgency, some require a proper response
+- **Hard** — tight SLAs, negative-sentiment tickets, agent workload matters
 
-```json
-{
-  "ticket_id": "T1",
-  "action_type": "assign | prioritize | respond | close",
-  "target_agent": "agent_1",
-  "priority": "low | medium | high",
-  "response_draft": "We are looking into this."
-}
-```
+## Actions
 
-## Observation Space
+Each step you pick one ticket and one of these actions:
+
+| Action | When to use |
+|--------|-------------|
+| `assign` | Route ticket to the right agent |
+| `prioritize` | Bump or lower urgency |
+| `respond` | Send a reply to the customer |
+| `close` | Mark resolved |
 
 ```json
 {
-  "tickets": [{"id": "T1", "subject": "...", "sentiment": "...", "priority": "...", "sla_remaining": 60, "resolved": false}],
-  "team_status": {"agent_1": {"workload": 0, "specialties": ["billing"]}},
-  "elapsed_time": 0,
-  "sla_breaches": 0
+  "ticket_id": "T2",
+  "action_type": "respond",
+  "response_draft": "Sorry to hear that — we're looking into this now."
 }
 ```
 
-## Reward Function
+## Rewards
 
-- `+0.2` per ticket closed
-- `-0.1` per SLA breach
-- `+0.5` for resolving a negative-sentiment ticket with a proper response
+- `+0.2` for closing a ticket
+- `+0.5` bonus for resolving a negative-sentiment ticket with a real response
+- `-0.1` penalty per SLA breach
 
-## Running inference.py
+## Running the agent
+
+Set your API credentials and run:
 
 ```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
@@ -70,10 +60,13 @@ export HF_TOKEN="hf_..."
 python inference.py
 ```
 
-## Running Locally
+The script runs all three task difficulties and prints a score summary.
+
+## Running locally
 
 ```bash
 pip install -r requirements.txt
 python app.py
-# API available at http://localhost:7860
 ```
+
+API will be at `http://localhost:7860`. You can hit `/reset`, `/step`, `/state` directly or check `/docs` for the full OpenAPI spec.
