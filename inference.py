@@ -19,7 +19,7 @@ from openai import OpenAI
 
 from env import Action, CustomerSupportEnv, Observation
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("KILO_BASE_URL") or "https://router.huggingface.co/v1"
 API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME")
 
@@ -142,7 +142,8 @@ def main() -> None:
     if not API_KEY:
         raise RuntimeError("Missing HF_TOKEN (or API_KEY).")
     if not MODEL_NAME:
-        raise RuntimeError("Missing MODEL_NAME.")
+        # Free Kilo models for submission/benchmarking
+        MODEL_NAME = os.getenv("KILO_MODEL_NAME") or "kilo/z-ai/glm-5:free"
 
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 

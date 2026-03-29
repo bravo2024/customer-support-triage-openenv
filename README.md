@@ -45,9 +45,13 @@ Train AI agents to triage customer support tickets with **3 difficulty tiers** i
 ## Setup
 
 ### Required environment variables (for `inference.py`)
-- `API_BASE_URL`
-- `MODEL_NAME`
+- `API_BASE_URL` (or `KILO_BASE_URL` for Kilo gateway)
+- `MODEL_NAME` (or `KILO_MODEL_NAME` for Kilo default)
 - `HF_TOKEN` (or `OPENAI_API_KEY`)
+
+Free submission-ready defaults:
+- `MODEL_NAME=kilo/z-ai/glm-5:free`
+- `API_BASE_URL=https://integrate.api.nvidia.com/v1` (or Kilo's URL)
 
 Example:
 ```bash
