@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+pydantic>=2.0.0
+openenv>=1.0.0
+gradio>=4.0.0
