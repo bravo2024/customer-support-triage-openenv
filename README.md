@@ -3,8 +3,8 @@ title: Customer Support Triage
 emoji: 🚀
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-app_file: app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
@@ -43,6 +43,19 @@ Train AI agents to triage customer support tickets with **3 difficulty tiers** i
 - **+0.5** for resolving a positive-sentiment ticket (e.g., "Love the product!").
 
 ## Setup
+
+### Required environment variables (for `inference.py`)
+- `API_BASE_URL`
+- `MODEL_NAME`
+- `HF_TOKEN` (or `OPENAI_API_KEY`)
+
+Example:
+```bash
+export API_BASE_URL="https://router.huggingface.co/v1"
+export MODEL_NAME="meta-llama/Meta-Llama-3.1-8B-Instruct"
+export HF_TOKEN="hf_..."
+python inference.py
+```
 
 1. **Deploy to Hugging Face Spaces**:
    - This Space runs natively on **Gradio SDK** (no Docker).
