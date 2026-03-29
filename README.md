@@ -1,6 +1,6 @@
 ---
 title: Customer Support Triage
-emoji: 🚀
+emoji: 🎫
 colorFrom: blue
 colorTo: purple
 sdk: docker
@@ -10,50 +10,59 @@ pinned: false
 
 # Customer Support Ticket Triage (OpenEnv)
 
-Train AI agents to triage customer support tickets with **3 difficulty tiers** in a **real-world enterprise workflow**. This environment is fully compliant with the [OpenEnv](https://github.com/openenv/openenv) spec.
+An RL environment for training AI agents to triage customer support tickets across three difficulty tiers. Fully compliant with the [OpenEnv](https://github.com/meta-pytorch/OpenEnv) spec.
 
 ## Tasks
 
-| Task   | Description                                      | Baseline Score (Rule-Based) |
-|--------|--------------------------------------------------|-----------------------------|
-| Easy   | Label tickets by sentiment.                      | 0.90                        |
-| Medium | Draft responses to simple queries.                | 0.75                        |
-| Hard   | Full triage (assign/prioritize/respond) under SLAs. | 0.60                      |
+| Task   | Description                                         | Baseline Score |
+|--------|-----------------------------------------------------|----------------|
+| Easy   | Label tickets by sentiment                          | 0.90           |
+| Medium | Draft responses to simple queries                   | 0.75           |
+| Hard   | Full triage (assign/prioritize/respond) under SLAs  | 0.60           |
+
+## API Endpoints
+
+| Endpoint    | Method | Description                    | Response                                    |
+|-------------|--------|--------------------------------|---------------------------------------------|
+| `/health`   | GET    | Liveness check                 | `{"status": "healthy"}`                     |
+| `/metadata` | GET    | Env name + description         | `{"name": ..., "description": ...}`         |
+| `/schema`   | GET    | Action / observation schemas   | `{"action": ..., "observation": ..., "state": ...}` |
+| `/reset`    | POST   | Reset env, returns initial obs | `{"observation": ..., "info": ...}`         |
+| `/step`     | POST   | Execute action                 | `{"observation": ..., "reward": ..., "done": ..., "info": ...}` |
+| `/state`    | GET    | Current observation            | `{"observation": ...}`                      |
+| `/mcp`      | POST   | JSON-RPC 2.0 MCP endpoint      | JSON-RPC 2.0 response                       |
 
 ## Action Space
 
-| Action      | Example                          |
-|-------------|----------------------------------|
-| `assign`    | `assign('T1', 'agent_1')`        |
-| `prioritize`| `prioritize('T1', 'high')`       |
-| `respond`   | `respond('T1', 'Your refund is processing.')` |
-| `close`     | `close('T1')`                    |
+```json
+{
+  "ticket_id": "T1",
+  "action_type": "assign | prioritize | respond | close",
+  "target_agent": "agent_1",
+  "priority": "low | medium | high",
+  "response_draft": "We are looking into this."
+}
+```
 
 ## Observation Space
 
-- `tickets`: List of active tickets (id, subject, sentiment, priority, SLA, resolved).
-- `team_status`: Workload and specialties of support agents.
-- `elapsed_time`: Minutes since the episode started.
-- `sla_breaches`: Count of breached SLAs.
+```json
+{
+  "tickets": [{"id": "T1", "subject": "...", "sentiment": "...", "priority": "...", "sla_remaining": 60, "resolved": false}],
+  "team_status": {"agent_1": {"workload": 0, "specialties": ["billing"]}},
+  "elapsed_time": 0,
+  "sla_breaches": 0
+}
+```
 
 ## Reward Function
 
-- **+0.2** per ticket closed.
-- **-0.1** per SLA breach.
-- **+0.5** for resolving a positive-sentiment ticket (e.g., "Love the product!").
+- `+0.2` per ticket closed
+- `-0.1` per SLA breach
+- `+0.5` for resolving a negative-sentiment ticket with a proper response
 
-## Setup
+## Running inference.py
 
-### Required environment variables (for `inference.py`)
-- `API_BASE_URL` (or `KILO_BASE_URL` for Kilo gateway)
-- `MODEL_NAME` (or `KILO_MODEL_NAME` for Kilo default)
-- `HF_TOKEN` (or `OPENAI_API_KEY`)
-
-Free submission-ready defaults:
-- `MODEL_NAME=kilo/z-ai/glm-5:free`
-- `API_BASE_URL=https://integrate.api.nvidia.com/v1` (or Kilo's URL)
-
-Example:
 ```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
 export MODEL_NAME="meta-llama/Meta-Llama-3.1-8B-Instruct"
@@ -61,25 +70,10 @@ export HF_TOKEN="hf_..."
 python inference.py
 ```
 
-1. **Deploy to Hugging Face Spaces**:
-   - This Space runs natively on **Gradio SDK** (no Docker).
-   - Builds automatically on push.
+## Running Locally
 
-2. **Run Locally**:
-   ```bash
-   git clone https://huggingface.co/spaces/vivekkopthsd/customer-support-triage
-   cd customer-support-triage
-   pip install -r requirements.txt
-   python app.py
-   ```
-   The Gradio UI will be available at `http://localhost:7860`.
-
-## Example Baseline Scores
-
-<!-- rebuild trigger: 2026-03-29T19:15+05:30 -->
-
-| Task   | Random Agent | Rule-Based Agent |
-|--------|--------------|-------------------|
-| Easy   | 0.45         | 0.90              |
-| Medium | 0.30         | 0.75              |
-| Hard   | 0.20         | 0.60              |
+```bash
+pip install -r requirements.txt
+python app.py
+# API available at http://localhost:7860
+```
