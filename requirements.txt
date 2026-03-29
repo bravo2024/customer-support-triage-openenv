@@ -2,3 +2,4 @@ pydantic>=2.0.0
 openenv==0.1.13
 gradio>=4.0.0
 flask>=2.0.0
+openai>=1.40.0
