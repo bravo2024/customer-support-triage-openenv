@@ -36,7 +36,20 @@ def health() -> dict:
     return {"ok": True}
 
 
+# Compatibility root for platforms that probe POST /
+@app.post("/")
+def root_post(req: Optional[ResetRequest] = None) -> dict:
+    return reset(req)
+
+
+@app.get("/")
+def root_get() -> dict:
+    return {"name": "customer-support-triage", "status": "ok"}
+
+
 @app.post("/reset")
+@app.post("/reset/")
+@app.post("/openenv/reset")
 def reset(req: Optional[ResetRequest] = None) -> dict:
     global _env
     task = req.task if req else "easy"
@@ -46,12 +59,16 @@ def reset(req: Optional[ResetRequest] = None) -> dict:
 
 
 @app.get("/state")
+@app.get("/state/")
+@app.get("/openenv/state")
 def state() -> dict:
     obs = _env.state()
     return {"observation": obs.model_dump()}
 
 
 @app.post("/step")
+@app.post("/step/")
+@app.post("/openenv/step")
 def step(req: StepRequest) -> dict:
     action = Action(**req.model_dump())
     obs, reward, done, info = _env.step(action)
