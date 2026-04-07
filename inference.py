@@ -6,7 +6,7 @@ MANDATORY env vars:
 
 Uses OpenAI client for all LLM calls.
 """
-from __futureing import annotations
+from __future__ import annotations  # fixed: was __futureing
 import json
 import os
 import re
@@ -58,43 +58,59 @@ def _obs_to_prompt(task: str, step: int, obs: Observation, history: List[str]) -
         "Return one valid action string.")
 
 
-def _oldest_ticket_id(obs: Observation) -> str:
+def _most_urgent_ticket_id(obs: Observation) -> str:  # renamed from _oldest_ticket_id
     unresolved = [t for t in obs.tickets if not t.resolved]
     if not unresolved:
         return obs.tickets[0].id
     return min(unresolved, key=lambda t: t.sla_remaining).id
 
 
+def _ticket_exists(ticket_id: str, obs: Observation) -> bool:
+    return any(t.id == ticket_id for t in obs.tickets)
+
+
 def _parse_action(action_text: str, obs: Observation) -> Action:
     text = (action_text or "").strip()
     m = ACTION_PATTERN.match(text)
     if not m:
-        return Action(ticket_id=_oldest_ticket_id(obs), action_type="close")
+        return Action(ticket_id=_most_urgent_ticket_id(obs), action_type="close")
 
     kind = m.group(1).lower()
     raw_args = m.group(2)
 
     # crude single-quote arg parser
     args = re.findall(r"'([^']*)'", raw_args)
+
     if kind == "close" and len(args) >= 1:
         ticket_id = args[0]
-        if args[0] != "AUTO_OLDEST":
-            ticket_id = _oldest_ticket_id(obs)
+        # If the model uses the magic token or the ticket doesn't exist, fallback
+        if ticket_id == "AUTO_OLDEST" or not _ticket_exists(ticket_id, obs):
+            ticket_id = _most_urgent_ticket_id(obs)
         return Action(ticket_id=ticket_id, action_type="close")
 
     if kind == "assign" and len(args) >= 2:
-        return Action(ticket_id=args[0], action_type="assign", target_agent=args[1])
+        ticket_id = args[0]
+        if not _ticket_exists(ticket_id, obs):
+            ticket_id = _most_urgent_ticket_id(obs)
+        return Action(ticket_id=ticket_id, action_type="assign", target_agent=args[1])
 
     if kind == "prioritize" and len(args) >= 2:
+        ticket_id = args[0]
+        if not _ticket_exists(ticket_id, obs):
+            ticket_id = _most_urgent_ticket_id(obs)
         p = args[1].lower()
         if p not in {"low", "medium", "high"}:
             p = "high"
-        return Action(ticket_id=args[0], action_type="prioritize", priority=p)  # type: ignore[arg-type]
+        return Action(ticket_id=ticket_id, action_type="prioritize", priority=p)  # type: ignore[arg-type]
 
     if kind == "respond" and len(args) >= 2:
-        return Action(ticket_id=args[0], action_type="respond", response_draft=args[1])
+        ticket_id = args[0]
+        if not _ticket_exists(ticket_id, obs):
+            ticket_id = _most_urgent_ticket_id(obs)
+        return Action(ticket_id=ticket_id, action_type="respond", response_draft=args[1])
 
-    return Action(ticket_id=_oldest_ticket_id(obs), action_type="close")
+    # fallback for any malformed action
+    return Action(ticket_id=_most_urgent_ticket_id(obs), action_type="close")
 
 
 def run_task(client: OpenAI, task: Literal["easy", "medium", "hard"]) -> Tuple[float, int]:
@@ -144,8 +160,8 @@ def main() -> None:
     for t in ("easy", "medium", "hard"):
         score, steps = run_task(client, t)  # type: ignore[arg-type]
         scores[t] = {"score": round(score, 4), "steps": steps}
+        print(f"{t}: score={score:.4f}, steps={steps}")   # moved inside loop
 
-    print(f"{t}: score={score:.4f}, steps={steps}")
     print("\nJSON summary:")
     print(json.dumps(scores, indent=2))
 
